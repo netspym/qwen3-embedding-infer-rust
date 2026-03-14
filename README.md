@@ -95,6 +95,16 @@ Expected performance on CPU (second for generation):
 |-----|---------|---------------------|
 | Intel Xeon 2 cores | ~1 | ~0.6 |
 
+## python binding
+
+```
+sudo apt install -y python3 python3-pip python3-dev
+python3 -m pip install -U pip maturin
+cd ~/projects/qwen3-infer
+maturin develop --release
+python3 test_qwen3.py
+```
+
 ## Configuration Options
 
 ### Model Settings
