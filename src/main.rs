@@ -124,12 +124,18 @@ impl GenerationStats {
 
         if self.prompt_time_ms > 0 {
             let tps = (self.prompt_tokens as f64 * 1000.0) / self.prompt_time_ms as f64;
-            println!("  Prompt processing: {:.1} tokens/sec ({} ms)", tps, self.prompt_time_ms);
+            println!(
+                "  Prompt processing: {:.1} tokens/sec ({} ms)",
+                tps, self.prompt_time_ms
+            );
         }
 
         if self.generation_time_ms > 0 && self.generated_tokens > 0 {
             let tps = (self.generated_tokens as f64 * 1000.0) / self.generation_time_ms as f64;
-            println!("  Generation speed:  {:.1} tokens/sec ({} ms)", tps, self.generation_time_ms);
+            println!(
+                "  Generation speed:  {:.1} tokens/sec ({} ms)",
+                tps, self.generation_time_ms
+            );
         }
     }
 }
@@ -165,10 +171,7 @@ fn generate_text(
     let prompt_time_ms = prompt_start.elapsed().as_millis();
 
     let seq_len = logits.dim(1)?;
-    let next_token_logits = logits
-        .narrow(1, seq_len - 1, 1)?
-        .squeeze(1)?
-        .squeeze(0)?;
+    let next_token_logits = logits.narrow(1, seq_len - 1, 1)?.squeeze(1)?.squeeze(0)?;
 
     let mut next_token = logits_processor.sample(&next_token_logits)?;
 
@@ -262,8 +265,9 @@ fn main() -> Result<()> {
     println!("=== Qwen3 Inference ===\n");
 
     // Load configuration
-    let config = Config::load_default()
-        .context("Failed to load config.toml. Make sure the file exists in the current directory.")?;
+    let config = Config::load_default().context(
+        "Failed to load config.toml. Make sure the file exists in the current directory.",
+    )?;
 
     let is_local = config.model.is_local();
     let is_moe = config.model.is_moe();
@@ -271,10 +275,17 @@ fn main() -> Result<()> {
     println!("Configuration loaded from config.toml");
     println!("  Model:       {}", config.model.name);
     println!("  Type:        {}", config.model.model_type);
-    println!("  Source:      {}", if is_local { "local" } else { &config.model.source });
+    println!(
+        "  Source:      {}",
+        if is_local {
+            "local"
+        } else {
+            &config.model.source
+        }
+    );
     println!("  Architecture:{}", if is_moe { "MoE" } else { "Dense" });
 
-    if config.model.model_type == ModelType::Chat {
+    if !config.model.is_embedding() {
         println!("  Max tokens:  {}", config.generation.max_tokens);
         println!("  Temperature: {}", config.generation.temperature);
         println!("  Top-p:       {}", config.generation.top_p);
@@ -314,7 +325,9 @@ fn main() -> Result<()> {
 
     // Get model files (local or download)
     let (tokenizer_path, config_path, model_path) = if is_local {
-        let local_path = config.model.local_path()
+        let local_path = config
+            .model
+            .local_path()
             .ok_or_else(|| anyhow::anyhow!("Invalid local model path"))?;
 
         println!("Loading from local path: {:?}\n", local_path);
@@ -373,21 +386,23 @@ fn main() -> Result<()> {
         // Load MoE model
         println!("  Loading MoE configuration...");
         let model_config: Qwen3MoEConfig = qwen3_moe::load_moe_config(&config_path)?;
-        println!("  {} layers, {} heads, {} experts, {} active per token",
-                 model_config.num_hidden_layers,
-                 model_config.num_attention_heads,
-                 model_config.num_experts,
-                 model_config.num_experts_per_tok);
+        println!(
+            "  {} layers, {} heads, {} experts, {} active per token",
+            model_config.num_hidden_layers,
+            model_config.num_attention_heads,
+            model_config.num_experts,
+            model_config.num_experts_per_tok
+        );
 
         ModelWrapper::MoE(Qwen3MoEForCausalLM::new(&model_config, vb)?)
     } else {
         // Load dense model
         println!("  Loading dense configuration...");
         let model_config: Qwen3Config = qwen3::load_config(&config_path)?;
-        println!("  {} layers, {} heads, head_dim={}",
-                 model_config.num_hidden_layers,
-                 model_config.num_attention_heads,
-                 model_config.head_dim);
+        println!(
+            "  {} layers, {} heads, head_dim={}",
+            model_config.num_hidden_layers, model_config.num_attention_heads, model_config.head_dim
+        );
 
         ModelWrapper::Dense(Qwen3ForCausalLM::new(&model_config, vb)?)
     };
@@ -400,7 +415,7 @@ fn main() -> Result<()> {
         ModelType::Chat => {
             println!("Step 5: Generating text...\n");
 
-            let prompt = config.prompt.build_prompt();
+            let prompt = config.prompt.build_prompt()?;
 
             println!("--- Prompt ---");
             println!("{}", prompt);
@@ -415,13 +430,17 @@ fn main() -> Result<()> {
             println!("Input text: {}", config.prompt.user);
 
             let start = Instant::now();
-            let embedding = generate_embedding(&mut model, &tokenizer, &config.prompt.user, &device)?;
+            let embedding =
+                generate_embedding(&mut model, &tokenizer, &config.prompt.user, &device)?;
             let elapsed = start.elapsed().as_millis();
 
             println!("\n--- Embedding ---");
             println!("  Dimension: {}", embedding.len());
             println!("  Time: {} ms", elapsed);
-            println!("  First 10 values: {:?}", &embedding[..10.min(embedding.len())]);
+            println!(
+                "  First 10 values: {:?}",
+                &embedding[..10.min(embedding.len())]
+            );
         }
     }
 
