@@ -97,6 +97,8 @@ Expected performance on CPU (second for generation):
 |-----|---------|---------------------|
 | Intel Xeon use 2 cores | ~1 | ~0.6 |
 
+Intel or AMD cpus with more cores could infer faster.
+
 ## python binding
 
 ```
