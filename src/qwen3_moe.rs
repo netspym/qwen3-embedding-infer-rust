@@ -40,9 +40,15 @@ pub struct Qwen3MoEConfig {
     pub norm_topk_prob: bool,
 }
 
-fn default_num_experts() -> usize { 128 }
-fn default_num_experts_per_tok() -> usize { 8 }
-fn default_norm_topk_prob() -> bool { true }
+fn default_num_experts() -> usize {
+    128
+}
+fn default_num_experts_per_tok() -> usize {
+    8
+}
+fn default_norm_topk_prob() -> bool {
+    true
+}
 
 impl Qwen3MoEConfig {
     #[inline]
@@ -213,9 +219,11 @@ impl Qwen3Attention {
         let attn_weights = candle_nn::ops::softmax_last_dim(&attn_weights)?;
         let attn_output = attn_weights.matmul(&v)?;
 
-        let attn_output = attn_output
-            .transpose(1, 2)?
-            .reshape((batch_size, seq_len, self.num_heads * self.head_dim))?;
+        let attn_output = attn_output.transpose(1, 2)?.reshape((
+            batch_size,
+            seq_len,
+            self.num_heads * self.head_dim,
+        ))?;
 
         self.o_proj.forward(&attn_output)
     }
@@ -396,11 +404,16 @@ impl SparseMoE {
 
             // Add to output (simplified assignment)
             let token_output_flat = token_output.squeeze(0)?;
-            output = output.slice_assign(&[token_idx..token_idx + 1, 0..hidden_size], &token_output_flat.unsqueeze(0)?)?;
+            output = output.slice_assign(
+                &[token_idx..token_idx + 1, 0..hidden_size],
+                &token_output_flat.unsqueeze(0)?,
+            )?;
         }
 
         // Add shared expert contribution if present
-        if let (Some(shared_expert), Some(shared_gate)) = (&self.shared_expert, &self.shared_expert_gate) {
+        if let (Some(shared_expert), Some(shared_gate)) =
+            (&self.shared_expert, &self.shared_expert_gate)
+        {
             let shared_output = shared_expert.forward(&x_flat)?;
             let shared_weight = candle_nn::ops::sigmoid(&shared_gate.forward(&x_flat)?)?;
             output = (output + shared_output.broadcast_mul(&shared_weight)?)?;
@@ -474,10 +487,18 @@ struct Qwen3MoELayer {
 }
 
 impl Qwen3MoELayer {
-    fn new(config: &Qwen3MoEConfig, layer_idx: usize, vb: VarBuilder) -> Result<Self> {
-        let input_layernorm = rms_norm(config.hidden_size, config.rms_norm_eps, vb.pp("input_layernorm"))?;
+    fn new(config: &Qwen3MoEConfig, vb: VarBuilder) -> Result<Self> {
+        let input_layernorm = rms_norm(
+            config.hidden_size,
+            config.rms_norm_eps,
+            vb.pp("input_layernorm"),
+        )?;
         let self_attn = Qwen3Attention::new(config, vb.pp("self_attn"))?;
-        let post_attention_layernorm = rms_norm(config.hidden_size, config.rms_norm_eps, vb.pp("post_attention_layernorm"))?;
+        let post_attention_layernorm = rms_norm(
+            config.hidden_size,
+            config.rms_norm_eps,
+            vb.pp("post_attention_layernorm"),
+        )?;
 
         // Try to load as MoE first, fall back to standard MLP
         let mlp = if config.num_experts > 1 {
@@ -500,12 +521,7 @@ impl Qwen3MoELayer {
         })
     }
 
-    fn forward(
-        &mut self,
-        x: &Tensor,
-        mask: Option<&Tensor>,
-        start_pos: usize,
-    ) -> Result<Tensor> {
+    fn forward(&mut self, x: &Tensor, mask: Option<&Tensor>, start_pos: usize) -> Result<Tensor> {
         let residual = x;
         let x = self.input_layernorm.forward(x)?;
         let x = self.self_attn.forward(&x, mask, start_pos)?;
@@ -536,20 +552,21 @@ struct Qwen3MoEModel {
 
 impl Qwen3MoEModel {
     fn new(config: &Qwen3MoEConfig, vb: VarBuilder) -> Result<Self> {
-        let embed_tokens = candle_nn::embedding(
-            config.vocab_size,
-            config.hidden_size,
-            vb.pp("embed_tokens"),
-        )?;
+        let embed_tokens =
+            candle_nn::embedding(config.vocab_size, config.hidden_size, vb.pp("embed_tokens"))?;
 
         let vb_layers = vb.pp("layers");
         let layers: Vec<_> = (0..config.num_hidden_layers)
-            .map(|i| Qwen3MoELayer::new(config, i, vb_layers.pp(i)))
+            .map(|i| Qwen3MoELayer::new(config, vb_layers.pp(i)))
             .collect::<Result<_>>()?;
 
         let norm = rms_norm(config.hidden_size, config.rms_norm_eps, vb.pp("norm"))?;
 
-        Ok(Self { embed_tokens, layers, norm })
+        Ok(Self {
+            embed_tokens,
+            layers,
+            norm,
+        })
     }
 
     fn forward(
@@ -593,9 +610,7 @@ impl Qwen3MoEForCausalLM {
             Linear::new(model.embed_tokens.embeddings().clone(), None)
         } else {
             linear_no_bias(config.hidden_size, config.vocab_size, vb.pp("lm_head"))
-                .unwrap_or_else(|_| {
-                    Linear::new(model.embed_tokens.embeddings().clone(), None)
-                })
+                .unwrap_or_else(|_| Linear::new(model.embed_tokens.embeddings().clone(), None))
         };
 
         Ok(Self { model, lm_head })
