@@ -2,7 +2,7 @@
 //!
 //! Loads settings from config.toml file
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 use std::path::Path;
 
@@ -38,7 +38,9 @@ pub struct ModelConfig {
     pub arch: String,
 }
 
-fn default_arch() -> String { "dense".to_string() }
+fn default_arch() -> String {
+    "dense".to_string()
+}
 
 /// Model type enum
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
@@ -88,13 +90,27 @@ pub struct PromptConfig {
 }
 
 // Default value functions
-fn default_source() -> String { "modelscope.cn".to_string() }
-fn default_dtype() -> String { "f32".to_string() }
-fn default_max_tokens() -> usize { 500 }
-fn default_temperature() -> f64 { 0.7 }
-fn default_top_p() -> f64 { 0.9 }
-fn default_seed() -> u64 { 42 }
-fn default_template() -> String { "chatml".to_string() }
+fn default_source() -> String {
+    "modelscope.cn".to_string()
+}
+fn default_dtype() -> String {
+    "f32".to_string()
+}
+fn default_max_tokens() -> usize {
+    500
+}
+fn default_temperature() -> f64 {
+    0.7
+}
+fn default_top_p() -> f64 {
+    0.9
+}
+fn default_seed() -> u64 {
+    42
+}
+fn default_template() -> String {
+    "chatml".to_string()
+}
 
 impl Config {
     /// Load configuration from a TOML file
@@ -139,7 +155,7 @@ impl ModelConfig {
                 .unwrap_or_else(|| "local_model".to_string())
         } else {
             // Convert "Qwen/Qwen3-0.6B" to "Qwen__Qwen3-0.6B"
-            self.name.replace('/', "__")
+            self.model_id().replace('/', "__")
         }
     }
 
@@ -162,14 +178,27 @@ impl ModelConfig {
     pub fn download_url(&self, filename: &str) -> String {
         format!(
             "https://{}/api/v1/models/{}/repo?Revision=master&FilePath={}",
-            self.source, self.name, filename
+            self.source,
+            self.model_id(),
+            filename
         )
     }
 }
 
 impl PromptConfig {
     /// Build the full prompt using the chat template
-    pub fn build_prompt(&self) -> String {
+    pub fn build_prompt(&self) -> Result<String> {
+        let template = self.template.trim().to_ascii_lowercase();
+        match template.as_str() {
+            "chatml" => Ok(self.build_chatml_prompt()),
+            other => bail!(
+                "Unsupported prompt template: {}. Supported templates: chatml",
+                other
+            ),
+        }
+    }
+
+    fn build_chatml_prompt(&self) -> String {
         let mut prompt = String::new();
 
         // Add system prompt if present
