@@ -95,7 +95,7 @@ Expected performance on CPU (second for generation):
 
 | CPU | No BLAS | With MKL/Accelerate |
 |-----|---------|---------------------|
-| Intel Xeon 2 cores | ~1 | ~0.6 |
+| Intel Xeon use 2 cores | ~1 | ~0.6 |
 
 ## python binding
 
