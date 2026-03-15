@@ -1,4 +1,4 @@
-# Tiny Qwen3 Embedding fast Inference engine for CPU
+# Tiny Qwen3 Embedding fast Inference engine in Rust language for CPU
 
 A Rust-based super light-weight inference engine for Qwen3 small models (chat and embedding) with CPU optimization.
 You could run it in a 2 cores old cpu or cloud server without calling external APIs
